@@ -39,6 +39,18 @@ sys_wait(void)
 }
 
 uint64
+sys_wait2(void)
+{
+  uint64 p;
+  uint64 p2;
+  if(argaddr(0, &p) < 0)
+    return -1;
+  if(argaddr(1, &p2) < 0)
+    return -1;
+  return wait2(p, p2);
+}
+
+uint64
 sys_sbrk(void)
 {
   int addr;
@@ -96,14 +108,26 @@ sys_uptime(void)
   return xticks;
 }
 
-// return the number of active processes in the system
-// fill in user-provided data structure with pid,state,sz,ppid,name
-uint64
-sys_getprocs(void)
-{
-  uint64 addr;  // user pointer to struct pstat
 
-  if (argaddr(0, &addr) < 0)
-    return -1;
-  return(procinfo(addr));
+// sys_setprocs
+uint64
+sys_setpriority(void){
+	int priority;
+	if(argint(0,&priority)<0){
+		return -1;
+	}
+	myproc()->priority = priority;
+	return 0;
 }
+
+uint64
+sys_getproc(void) {
+	uint64 addr;
+	if(argaddr(0, &addr) < 0){
+		return -1;
+	}
+	return (procinfo(addr));
+}	
+
+
+

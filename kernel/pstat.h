@@ -1,7 +1,13 @@
 struct pstat {
-  int pid;     // Process ID
-  enum procstate state;  // Process state
-  uint64 size;     // Size of process memory (bytes)
-  int ppid;        // Parent process ID
-  char name[16];   // Parent command name
+	int pid; 
+	enum procstate state; 
+	uint64 size; 
+	int ppid; 
+	char name[16];
+	uint readytime;
+	uint cputime;
 };
+
+struct rusage {
+   uint cputime;
+};	
