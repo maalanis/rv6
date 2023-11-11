@@ -105,6 +105,11 @@ extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_getprocs(void);
+extern uint64 sys_wait2(void);
+extern uint64 sys_getpriority(void); //ADDING "sys_getpriority" to the system call table
+extern uint64 sys_setpriority(void); //ADDING "sys_setpriority" to the system call table
+extern uint64 sys_freepmem(void); //ADDING "sys_freepmem" to the system call table
+extern uint64 sys_memuser(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -129,6 +134,11 @@ static uint64 (*syscalls[])(void) = {
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
 [SYS_getprocs]   sys_getprocs,
+[SYS_wait2] 	 sys_wait2,
+[SYS_getpriority]  sys_getpriority, //ADDED "sys_getpriority" TO SYSCALLS ARRAY
+[SYS_setpriority]  sys_setpriority, //ADDED "sys_setpriority" TO SYSCALLS ARRAY
+[SYS_freepmem]	   sys_freepmem, //ADDED "sys_freepmem" to SYSCALLS ARRAY
+[SYS_memuser]	sys_memuser,
 };
 
 void

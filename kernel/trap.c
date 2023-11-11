@@ -67,6 +67,24 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(r_scause() == 13 || r_scause() == 15){
+  	uint64 fault_addr = r_stval();
+  	if(fault_addr < p -> sz){
+  		char* physical_frame = kalloc();
+  		if(physical_frame == 0){
+  			printf("usertrap(): out of memory, pid = %d\n", p -> pid);
+  			p -> killed = 1;
+ 
+  		}
+  		else{
+  			memset((void*)physical_frame, 0, PGSIZE);
+  			mappages(p -> pagetable, PGROUNDDOWN(fault_addr), PGSIZE, (uint64)physical_frame, (PTE_R | PTE_W | PTE_X | PTE_U));
+  		}
+  	}
+  	else{
+  		printf("usertrap(): out of memory, pid = %d, faulting_address = %p\n", p -> pid, fault_addr);
+  		p -> killed = 1;
+  	}
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
@@ -77,9 +95,11 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
+    p -> cputime++;
     yield();
-
+  }
+  
   usertrapret();
 }
 
@@ -150,8 +170,10 @@ kerneltrap()
   }
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING)
+  if(which_dev == 2 && myproc() != 0 && myproc()->state == RUNNING){
+    myproc()->cputime++;
     yield();
+  }
 
   // the yield() may have caused some traps to occur,
   // so restore trap registers for use by kernelvec.S's sepc instruction.

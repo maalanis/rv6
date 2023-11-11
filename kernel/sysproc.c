@@ -7,6 +7,8 @@
 #include "spinlock.h"
 #include "proc.h"
 
+uint64 freepmem(void);
+
 uint64
 sys_exit(void)
 {
@@ -43,13 +45,20 @@ sys_sbrk(void)
 {
   int addr;
   int n;
+  int new_size;
 
-  if(argint(0, &n) < 0)
+  if(argint(0, &n) < 0){
     return -1;
+  }
   addr = myproc()->sz;
-  if(growproc(n) < 0)
-    return -1;
-  return addr;
+  new_size = addr + n;
+  
+  if(new_size < TRAPFRAME){
+  	myproc() -> sz = new_size;
+  	return addr;
+  }
+  
+  return -1;
 }
 
 uint64
@@ -102,8 +111,67 @@ uint64
 sys_getprocs(void)
 {
   uint64 addr;  // user pointer to struct pstat
-
-  if (argaddr(0, &addr) < 0)
+  //struct proc *p;  //create a pointer to struct proc
+  
+  //checks if address of first argument (index 0) passed to system call and be retrieved
+  //by argaddr function
+  if (argaddr(0, &addr) < 0){
     return -1;
+  }
+  
   return(procinfo(addr));
+}
+
+// sys_wait2
+uint64
+sys_wait2(void)
+{
+  uint64 p;
+  uint64 p2;
+  
+  if(argaddr(0, &p) < 0){
+    return -1;
+  }
+  
+  if(argaddr(1, &p2) < 0){
+    return -1;
+  }
+  
+  return wait2(p, p2);
+  
+}
+
+// sys_getprocs
+uint64
+sys_getpriority(void){
+	return myproc()->priority;
+}
+
+// sys_setprocs
+uint64
+sys_setpriority(void){
+	int priority;
+	if(argint(0, &priority) < 0){
+		return -1;
+	}
+	//if(priority->MAXEFPRIORITY){
+	//	return -1;
+	//}
+	
+	myproc()->priority = priority;
+	return 0;
+}
+
+uint64
+sys_freepmem(void)
+{
+	int res = freepmem();
+	return res;
+}
+
+uint64
+sys_memuser(void)
+{
+	int res = freepmem();
+	return res;
 }

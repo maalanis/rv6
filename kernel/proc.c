@@ -6,6 +6,7 @@
 #include "proc.h"
 #include "pstat.h"
 #include "defs.h"
+#include "syscall.h"
 
 struct cpu cpus[NCPU];
 
@@ -120,6 +121,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p-> cputime = 0;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -440,28 +442,68 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  struct proc *maxproc;
   
   c->proc = 0;
+  
+  //indicates an infinite loop
   for(;;){
-    // Avoid deadlock by ensuring that devices can interrupt.
-    intr_on();
+  	//if POLICY == 0 this will execute
+  	if(POLICY == 0){
+  		// Avoid deadlock by ensuring that devices can interrupt.
+  		intr_on();
 
-    for(p = proc; p < &proc[NPROC]; p++) {
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
+    		for(p = proc; p < &proc[NPROC]; p++) {
+      			acquire(&p->lock);
+      			if(p->state == RUNNABLE) {
+        			// Switch to chosen process.  It is the process's job
+        			// to release its lock and then reacquire it
+        			// before jumping back to us.
+        			p->state = RUNNING;
+        			c->proc = p;
+        			swtch(&c->context, &p->context);
 
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
+        			// Process is done running for now.
+        			// It should have changed its p->state before coming back.
+        			c->proc = 0;
+        		}
+        		release(&p->lock);
+        	}
       }
-      release(&p->lock);
-    }
+      else{
+  	int maximum_process = 0;
+  	maxproc = proc;
+  	for(p = proc; p < &proc[NPROC]; p++) {
+  		acquire(&p->lock);
+  		
+  		if(p-> state == RUNNABLE){
+  			int age = sys_uptime() - p->readytime;
+  			int max_priority = p->priority + age;
+  			if(p->priority + (age) > maximum_process){
+  				maximum_process = max_priority;
+  				maxproc = p;
+  			}
+  		}
+  		release(&p->lock);
+  	}
+ 
+  	intr_on();
+      	acquire(&maxproc->lock);
+      	
+      	if(maxproc->state == RUNNABLE) {
+        	// Switch to chosen process.  It is the process's job
+        	// to release its lock and then reacquire it
+        	// before jumping back to us.
+        	maxproc->state = RUNNING;
+        	c->proc = maxproc;
+        	swtch(&c->context, &maxproc->context);
+
+        	// Process is done running for now.
+        	// It should have changed its p->state before coming back.
+        	c->proc = 0;
+      		}
+      		release(&maxproc->lock);
+     }
   }
 }
 
@@ -561,12 +603,15 @@ void
 wakeup(void *chan)
 {
   struct proc *p;
+  
+  //uint64 sys_uptime(void);
 
   for(p = proc; p < &proc[NPROC]; p++) {
     if(p != myproc()){
       acquire(&p->lock);
       if(p->state == SLEEPING && p->chan == chan) {
         p->state = RUNNABLE;
+        p->readytime = sys_uptime();
       }
       release(&p->lock);
     }
@@ -672,6 +717,9 @@ procinfo(uint64 addr)
     procinfo.pid = p->pid;
     procinfo.state = p->state;
     procinfo.size = p->sz;
+    procinfo.priority = p->priority;
+    procinfo.readytime = p->readytime;
+    
     if (p->parent)
       procinfo.ppid = (p->parent)->pid;
     else
@@ -683,4 +731,68 @@ procinfo(uint64 addr)
     addr += sizeof(procinfo);
   }
   return nprocs;
+}
+
+// WAIT2
+// Wait for a child process to exit and return its status and reusage.
+// Return -1 if this process has no children.
+int
+wait2(uint64 addr, uint64 addr2)
+{
+  struct proc *np;
+  int havekids, pid;
+  struct rusage cru;
+  struct proc *p = myproc();
+
+  acquire(&wait_lock);
+
+  for(;;){
+    // Scan through table looking for exited children.
+    havekids = 0;
+    for(np = proc; np < &proc[NPROC]; np++){
+      if(np->parent == p){
+        // make sure the child isn't still in exit() or swtch().
+        acquire(&np->lock);
+
+        havekids = 1;
+        if(np->state == ZOMBIE){
+          // Found one.
+          pid = np->pid;
+          
+          //copying cputime to cru and to np
+          cru.cputime = np -> cputime;
+          
+          if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate,
+                                  sizeof(np->xstate)) < 0) {
+            release(&np->lock);
+            release(&wait_lock);
+            return -1;
+          }
+          
+          if(addr2 != 0 && copyout(p->pagetable, addr2, (char *)&cru,
+                                  sizeof(cru)) < 0) {
+            release(&np->lock);
+            release(&wait_lock);
+            return -1;
+          }
+          
+          freeproc(np);
+          release(&np->lock);
+          release(&wait_lock);
+          return pid;
+        }
+        release(&np->lock);
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekids || p->killed){
+      release(&wait_lock);
+      return -1;
+    }
+    
+    
+    // Wait for a child to exit.
+    sleep(p, &wait_lock);  //DOC: wait-sleep
+  }
 }

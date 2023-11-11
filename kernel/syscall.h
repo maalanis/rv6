@@ -21,3 +21,8 @@
 #define SYS_mkdir  20
 #define SYS_close  21
 #define SYS_getprocs  22
+#define SYS_wait2     23
+#define SYS_getpriority  24 //ADDING "getpriority" with 23 in system call numbers
+#define SYS_setpriority  25 //ADDING "setpriority" with 24 in system call numbers
+#define SYS_freepmem 26 //ADDING "freepmem" with 25 in system call numbers
+#define SYS_memuser 27 

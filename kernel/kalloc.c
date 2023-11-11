@@ -10,7 +10,7 @@
 #include "defs.h"
 
 void freerange(void *pa_start, void *pa_end);
-
+uint64 freepmem(void);
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
@@ -79,4 +79,22 @@ kalloc(void)
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+uint64
+freepmem(void)
+{
+	struct run *r;
+	int fpages = 0;
+	
+	acquire(&kmem.lock);
+	r = kmem.freelist;
+	while(r){
+		fpages = fpages + 1;
+		r = r -> next;
+	}
+	release(&kmem.lock);
+	
+	int fmem = fpages * PGSIZE;
+	return fmem;
 }
