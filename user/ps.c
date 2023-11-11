@@ -7,6 +7,7 @@ int
 main(int argc, char **argv)
 {
   struct pstat uproc[NPROC];
+  
   int nprocs;
   int i;
   char *state;
@@ -20,12 +21,19 @@ main(int argc, char **argv)
   nprocs = getprocs(uproc);
   if (nprocs < 0)
     exit(-1);
-
-  printf("pid\tstate\t\tsize\tppid\tname\n");
+ 
+  printf("pid\tstate\t\tsize\tppid\tname\tpriority\tcputime\tage\n");
   for (i=0; i<nprocs; i++) {
     state = states[uproc[i].state];
-    printf("%d\t%s\t%l\t%d\t%s\n", uproc[i].pid, state,
-                   uproc[i].size, uproc[i].ppid, uproc[i].name);
+    
+    if(uproc[i].state == RUNNING){
+    	printf("%d\t%s\t%l\t%d\t%s\t%d\t%d\t%d\n", uproc[i].pid, state,
+                   uproc[i].size, uproc[i].ppid, uproc[i].name, uproc[i].priority, uproc[i].cputime, (uptime() - uproc[i].readytime));
+    }
+    else{
+        printf("%d\t%s\t%l\t%d\t%s\t%d\t%d\n", uproc[i].pid, state, 
+        	   uproc[i].size, uproc[i].ppid, uproc[i].name, uproc[i].priority, uproc[i].cputime);
+    }
   }
 
   exit(0);
