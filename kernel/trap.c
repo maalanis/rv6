@@ -29,63 +29,92 @@ trapinithart(void)
   w_stvec((uint64)kernelvec);
 }
 
+int is_valid_address(uint64 addr, struct proc *p) {
+
+    if (addr < p->sz) {
+        return 1; 
+    }  
+    for (int i = 0; i < MAX_MMR; i++) {
+        if (p->mmr[i].valid && addr >= p->mmr[i].addr && addr < (p->mmr[i].addr + p->mmr[i].length)) {
+            return 1; 
+        }
+    }
+    return 0; 
+}
+
 //
 // handle an interrupt, exception, or system call from user space.
 // called from trampoline.S
 //
-void
-usertrap(void)
-{
-  int which_dev = 0;
 
-  if((r_sstatus() & SSTATUS_SPP) != 0)
-    panic("usertrap: not from user mode");
 
-  // send interrupts and exceptions to kerneltrap(),
-  // since we're now in the kernel.
-  w_stvec((uint64)kernelvec);
+void 
+usertrap(void) {
+    int which_dev = 0;
+    struct proc *p = myproc();
 
-  struct proc *p = myproc();
-  
-  // save user program counter.
-  p->trapframe->epc = r_sepc();
-  
-  if(r_scause() == 8){
-    // system call
+    if ((r_sstatus() & SSTATUS_SPP) != 0)
+        panic("usertrap: not from user mode");
 
-    if(p->killed)
-      exit(-1);
+    // send interrupts and exceptions to kerneltrap(),
+    // since we're now in the kernel.
+    w_stvec((uint64)kernelvec);
 
-    // sepc points to the ecall instruction,
-    // but we want to return to the next instruction.
-    p->trapframe->epc += 4;
+    // save user program counter.
+    p->trapframe->epc = r_sepc();
 
-    // an interrupt will change sstatus &c registers,
-    // so don't enable until done with those registers.
-    intr_on();
+    if (r_scause() == 8) {
+        // system call
+        if (p->killed)
+            exit(-1);
 
-    syscall();
-  } else if((which_dev = devintr()) != 0){
-    // ok
-  } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
-  }
+        // sepc points to the ecall instruction,
+        // but we want to return to the next instruction.
+        p->trapframe->epc += 4;
 
-  if(p->killed)
-    exit(-1);
+        // an interrupt will change sstatus &c registers,
+        // so don't enable until done with those registers.
+        intr_on();
 
-  // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
-    yield();
+        syscall();
+    } else if ((which_dev = devintr()) != 0) {
+        // ok
+    } else if (r_scause() == 13 || r_scause() == 15) {
+        uint64 fault_addr = r_stval();
+        if (r_scause() == 13 || r_scause() == 15) {
+            if (!is_valid_address(fault_addr, p)) {
+                p->killed = 1;
+                exit(-1);
+            }
+            void *physical_mem = kalloc();
+            if (!physical_mem) {
+                printf("usertrap(): out of memory\n");
+                p->killed = 1;
+                exit(-1);
+            }
+            uint64 aligned_addr = PGROUNDDOWN(fault_addr);
+            if (mappages(p->pagetable, aligned_addr, PGSIZE, (uint64)physical_mem, PTE_R | PTE_W | PTE_X | PTE_U) < 0) {
+                kfree(physical_mem);
+                printf("usertrap(): mappages failed\n");
+                p->killed = 1;
+                exit(-1);
+            }
+        }
+    } else {
+        printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+        printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+        p->killed = 1;
+    }
 
-  usertrapret();
+    if (p->killed)
+        exit(-1);
+
+    if (which_dev == 2)
+        yield();
+
+    usertrapret();
 }
 
-//
-// return to user space
-//
 void
 usertrapret(void)
 {
