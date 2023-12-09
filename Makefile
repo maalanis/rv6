@@ -27,6 +27,7 @@ OBJS = \
   $K/exec.o \
   $K/sysfile.o \
   $K/kernelvec.o \
+  $K/semaphore.o \
   $K/plic.o \
   $K/virtio_disk.o
 
@@ -136,6 +137,12 @@ UPROGS=\
 	$U/_ps\
 	$U/_pstree\
 	$U/_pstest\
+	$U/_private\
+	$U/_prodcons1\
+	$U/_prodcons2\
+	$U/_prodcons3\
+	$U/_prodcons-sem\
+	
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
@@ -143,12 +150,10 @@ fs.img: mkfs/mkfs README $(UPROGS)
 -include kernel/*.d user/*.d
 
 clean: 
-	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*/*.o */*.d */*.asm */*.sym \
-	$U/initcode $U/initcode.out $K/kernel fs.img \
-	mkfs/mkfs .gdbinit \
-        $U/usys.S \
-	$(UPROGS)
+	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg
+	rm -f $(OBJS) $(OBJS:.o=.d)
+	rm -f $U/initcode $U/initcode.out $K/kernel fs.img mkfs/mkfs .gdbinit $U/usys.S
+	rm -f $(UPROGS)
 
 # try to generate a unique GDB port
 GDBPORT = $(shell expr `id -u` % 5000 + 25000)
